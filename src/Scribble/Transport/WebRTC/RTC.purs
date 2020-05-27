@@ -32,12 +32,20 @@ module WebRTC.RTC
 ) where
 
 import Prelude
+import Control.Alt ((<|>))
 
 import Effect.Aff (Aff)
 import Effect.Aff.Compat (EffectFnAff, fromEffectFnAff)
 import Effect (Effect)
 import Data.Maybe (Maybe(..))
 import WebRTC.MediaStream (MediaStream, MediaStreamTrack)
+
+import Data.Argonaut.Decode (class DecodeJson, decodeJson)
+import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Argonaut.Core (jsonEmptyObject, jsonSingletonObject)
+import Data.Argonaut.Decode.Combinators (getField)
+import Data.NonEmpty (NonEmpty)
+import Data.Argonaut.Encode.Combinators ((~>), (:=))
 
 foreign import hasRTC :: Boolean
 
@@ -152,7 +160,7 @@ foreign import ontrack
   :: (RTCTrackEvent -> Effect Unit) -> RTCPeerConnection -> Effect Unit
 
 
-foreign import data RTCSessionDescription :: Type
+-- foreign import data RTCSessionDescription :: Type
 
 
 foreign import newRTCSessionDescription
@@ -206,3 +214,53 @@ foreign import ondatachannel
   :: (RTCDataChannel -> Effect Unit) -> RTCPeerConnection -> Effect Unit
 
 foreign import onopen :: (Effect Unit) -> RTCDataChannel -> Effect Unit
+
+data ServerType
+  = STUN { urls :: NonEmpty Array String }
+  | TURN { urls :: NonEmpty Array String, credentialType :: Maybe String, credential :: Maybe String, username :: Maybe String }
+
+instance serverTypeEncodeJson :: EncodeJson ServerType where
+  encodeJson (STUN s) = jsonSingletonObject "urls" (encodeJson s.urls)
+  encodeJson (TURN t) = (
+    "urls" := t.urls
+    ~> "credentialType" := t.credentialType
+    ~> "credential" := t.credential
+    ~> "username" := t.username
+    ~> jsonEmptyObject
+  )
+
+instance serverTypeDecodeJson :: DecodeJson ServerType where
+  decodeJson json' = getTurn json' <|> getStun json'
+    where
+      getTurn json = do
+        obj <- decodeJson json
+        credentialType <- getField obj "credentialType"
+        credential <- getField obj "credential"
+        username <- getField obj "username"
+        urls <- getField obj "urls"
+        pure $ TURN { credentialType, credential, username, urls }
+      getStun json = do
+        obj <- decodeJson json
+        urls <- getField obj "urls"
+        pure $ STUN { urls }
+
+newtype RTCSessionDescription = RTCSessionDescription { sdp :: String, "type" :: String }
+
+rtcSessionDescriptionSdp :: RTCSessionDescription -> String
+rtcSessionDescriptionSdp (RTCSessionDescription r) = r.sdp
+
+rtcSessionDescriptionType :: RTCSessionDescription -> String
+rtcSessionDescriptionType (RTCSessionDescription {"type" : t}) = t
+
+instance rTCSessionDescriptionEncodeJSON :: EncodeJson RTCSessionDescription where
+  encodeJson (RTCSessionDescription {"sdp" : sdp, "type" : t}) =
+    ("sdp" := sdp
+    ~> "type" := t
+    ~> jsonEmptyObject)
+
+instance rTCSessionDescriptionDecodeJSON :: DecodeJson RTCSessionDescription where
+  decodeJson json = do
+    obj <- decodeJson json
+    sdp <- getField obj "sdp"
+    t <- getField obj "type"
+    pure $ RTCSessionDescription { "sdp" : sdp, "type" : t }
