@@ -130,5 +130,5 @@ instance webSocketURLTransport :: Transport WebSocket URL where
   receive = liftAff <<< receive
   close = liftAff <<< close
 
-instance webSocketURLTransportClient :: TransportClient WebSocket URL where
-  connect = liftAff <<< connect
+instance webSocketURLTransportClient :: TransportClient WebSocket URL () where
+  connect p x = liftAff $ connect p 

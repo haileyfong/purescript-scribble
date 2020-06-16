@@ -15,8 +15,8 @@ instance memoryAvarTransport :: Transport Memory (AVar Json) where
   receive (Memory v) = liftAff $ take v
   close = const $ pure unit
 
-instance memoryAvarTransportConnect :: TransportClient Memory (AVar Json) where
-  connect = pure <<< Memory
+instance memoryAvarTransportConnect :: TransportClient Memory (AVar Json) () where
+  connect p x = pure $ Memory p
 
-instance memoryAvarTransportAwait :: TransportServer Memory (AVar Json) where
-  serve = pure <<< Memory
+instance memoryAvarTransportAwait :: TransportServer Memory (AVar Json) () where
+  serve p x = pure $ Memory p
